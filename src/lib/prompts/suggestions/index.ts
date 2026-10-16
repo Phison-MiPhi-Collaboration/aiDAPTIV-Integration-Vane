@@ -13,5 +13,5 @@ Sample suggestions for a conversation about Elon Musk:
     ]
 }
 
-Today's date is ${new Date().toISOString()}
+Today's date is ${new Date().toISOString().slice(0, 10)}
 `;
