@@ -3,7 +3,6 @@ import UploadStore from '@/lib/uploads/store';
 
 const getSpeedPrompt = (
   actionDesc: string,
-  i: number,
   maxIteration: number,
   fileDesc: string,
 ) => {
@@ -19,7 +18,7 @@ const getSpeedPrompt = (
 
   Today's date: ${today}
 
-  You are currently on iteration ${i + 1} of your research process and have ${maxIteration} total iterations so act efficiently.
+  You have ${maxIteration} total iterations for your research process so act efficiently. The current iteration number is given in the latest <iteration> message.
   When you are finished, you must call the \`done\` tool. Never output text directly.
 
   <goal>
@@ -88,7 +87,6 @@ const getSpeedPrompt = (
 
 const getBalancedPrompt = (
   actionDesc: string,
-  i: number,
   maxIteration: number,
   fileDesc: string,
 ) => {
@@ -104,7 +102,7 @@ const getBalancedPrompt = (
 
   Today's date: ${today}
 
-  You are currently on iteration ${i + 1} of your research process and have ${maxIteration} total iterations so act efficiently.
+  You have ${maxIteration} total iterations for your research process so act efficiently. The current iteration number is given in the latest <iteration> message.
   When you are finished, you must call the \`done\` tool. Never output text directly.
 
   <goal>
@@ -189,7 +187,6 @@ const getBalancedPrompt = (
 
 const getQualityPrompt = (
   actionDesc: string,
-  i: number,
   maxIteration: number,
   fileDesc: string,
 ) => {
@@ -205,7 +202,7 @@ const getQualityPrompt = (
 
   Today's date: ${today}
 
-  You are currently on iteration ${i + 1} of your research process and have ${maxIteration} total iterations. Use every iteration wisely to gather comprehensive information.
+  You have ${maxIteration} total iterations for your research process. Use every iteration wisely to gather comprehensive information. The current iteration number is given in the latest <iteration> message.
   When you are finished, you must call the \`done\` tool. Never output text directly.
 
   <goal>
@@ -320,7 +317,6 @@ const getQualityPrompt = (
 export const getResearcherPrompt = (
   actionDesc: string,
   mode: 'speed' | 'balanced' | 'quality',
-  i: number,
   maxIteration: number,
   fileIds: string[],
 ) => {
@@ -337,16 +333,16 @@ export const getResearcherPrompt = (
 
   switch (mode) {
     case 'speed':
-      prompt = getSpeedPrompt(actionDesc, i, maxIteration, fileDesc);
+      prompt = getSpeedPrompt(actionDesc, maxIteration, fileDesc);
       break;
     case 'balanced':
-      prompt = getBalancedPrompt(actionDesc, i, maxIteration, fileDesc);
+      prompt = getBalancedPrompt(actionDesc, maxIteration, fileDesc);
       break;
     case 'quality':
-      prompt = getQualityPrompt(actionDesc, i, maxIteration, fileDesc);
+      prompt = getQualityPrompt(actionDesc, maxIteration, fileDesc);
       break;
     default:
-      prompt = getSpeedPrompt(actionDesc, i, maxIteration, fileDesc);
+      prompt = getSpeedPrompt(actionDesc, maxIteration, fileDesc);
       break;
   }
 

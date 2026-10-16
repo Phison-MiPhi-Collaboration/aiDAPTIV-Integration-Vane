@@ -56,14 +56,22 @@ class Researcher {
       },
     ];
 
+    // Built once and kept identical across iterations so the server can reuse
+    // the KV cache for the whole prefix. The iteration counter is appended to
+    // the history instead; a counter inside the system prompt would change the
+    // prefix every iteration and force a near-full re-prefill.
+    const researcherPrompt = getResearcherPrompt(
+      availableActionsDescription,
+      input.config.mode,
+      maxIteration,
+      input.config.fileIds,
+    );
+
     for (let i = 0; i < maxIteration; i++) {
-      const researcherPrompt = getResearcherPrompt(
-        availableActionsDescription,
-        input.config.mode,
-        i,
-        maxIteration,
-        input.config.fileIds,
-      );
+      agentMessageHistory.push({
+        role: 'user',
+        content: `<iteration>Iteration ${i + 1} of ${maxIteration}</iteration>`,
+      });
 
       const actionStream = input.config.llm.streamText({
         messages: [
