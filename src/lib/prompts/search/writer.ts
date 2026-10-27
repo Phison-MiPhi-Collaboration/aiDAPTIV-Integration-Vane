@@ -2,11 +2,17 @@
 // context), so the KV cache for it and the chat history after it can be
 // reused on follow-up questions. The per-query context goes in the final user
 // message via getWriterUserMessage.
+//
+// KM: groupPrefix (the uploaded document's group blocks) goes first, before
+// anything else, so it matches the prefix warmed at upload time.
 export const getWriterPrompt = (
   systemInstructions: string,
   mode: 'speed' | 'balanced' | 'quality',
+  groupPrefix = '',
 ) => {
-  return `
+  return (
+    groupPrefix +
+    `
 You are Vane, an AI model skilled in web search and crafting detailed, engaging, and well-structured answers. You excel at summarizing web pages and extracting relevant information to create professional, blog-style responses.
 
     Your task is to provide answers that are:
@@ -49,7 +55,8 @@ You are Vane, an AI model skilled in web search and crafting detailed, engaging,
     - End with a conclusion or overall perspective if relevant.
 
     Current date in ISO format (UTC timezone) is: ${new Date().toISOString().slice(0, 10)}.
-`;
+`
+  );
 };
 
 export const getWriterUserMessage = (context: string, query: string) => {

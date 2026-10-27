@@ -68,7 +68,13 @@ class CustomLLM extends OpenAILLM {
             // Researcher: deterministic search queries give the same
             // retrieved chunks, so tool results and the writer context match.
             if (body.tools) overrides.temperature = 0;
- 
+
+            // llama.cpp reads max_tokens; mirror the OpenAI field so short
+            // requests (KM warm-ups use 1 token) stop early.
+            if (body.max_completion_tokens != null && body.max_tokens == null) {
+              overrides.max_tokens = body.max_completion_tokens;
+            }
+
             init = {
               ...init,
               body: JSON.stringify({ ...body, ...extraBody, ...overrides }),

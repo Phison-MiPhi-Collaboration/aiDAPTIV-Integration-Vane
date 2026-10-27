@@ -319,17 +319,22 @@ export const getResearcherPrompt = (
   mode: 'speed' | 'balanced' | 'quality',
   maxIteration: number,
   fileIds: string[],
+  groupPrefix = '',
 ) => {
   let prompt = '';
 
   const filesData = UploadStore.getFileData(fileIds);
 
-  const fileDesc = filesData
+  let fileDesc = filesData
     .map(
       (f) =>
         `<file><name>${f.fileName}</name><initial_content>${f.initialContent}</initial_content></file>`,
     )
     .join('\n');
+
+  if (groupPrefix) {
+    fileDesc = `The text of the user's uploaded document(s) is included at the very start of this prompt inside <document_group> tags. For a long document it is the part most relevant to this conversation. Use it directly; search the uploaded files only for information it does not contain.${fileDesc ? `\n${fileDesc}` : ''}`;
+  }
 
   switch (mode) {
     case 'speed':
@@ -346,5 +351,7 @@ export const getResearcherPrompt = (
       break;
   }
 
-  return prompt;
+  // KM: the group blocks go first so the prompt starts with the prefix
+  // warmed at upload time.
+  return groupPrefix + prompt;
 };

@@ -52,6 +52,7 @@ const uploadsSearchAction: ResearchAction<typeof schema> = {
     const uploadStore = new UploadStore({
       embeddingModel: additionalConfig.embedding,
       fileIds: additionalConfig.fileIds,
+      excludedGroups: additionalConfig.kmExcludedGroups,
     });
 
     const results = await uploadStore.query(input.queries, 10);

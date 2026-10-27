@@ -9,6 +9,9 @@ export async function POST(req: Request) {
     const files = formData.getAll('files') as File[];
     const embeddingModel = formData.get('embedding_model_key') as string;
     const embeddingModelProvider = formData.get('embedding_model_provider_id') as string;
+    /* Optional: the chat model KM warms the uploaded document's KV cache with */
+    const chatModel = formData.get('chat_model_key') as string | null;
+    const chatModelProvider = formData.get('chat_model_provider_id') as string | null;
 
     if (!embeddingModel || !embeddingModelProvider) {
       return NextResponse.json(
@@ -23,6 +26,10 @@ export async function POST(req: Request) {
     
     const uploadManager = new UploadManager({
       embeddingModel: model,
+      chatModel:
+        chatModel && chatModelProvider
+          ? { providerId: chatModelProvider, key: chatModel }
+          : undefined,
     })
 
     const processedFiles = await uploadManager.processFiles(files);

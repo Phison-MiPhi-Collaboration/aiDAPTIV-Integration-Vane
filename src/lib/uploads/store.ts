@@ -7,6 +7,8 @@ import { hashObj } from '../utils/hash';
 type UploadStoreParams = {
     embeddingModel: BaseEmbedding<any>;
     fileIds: string[];
+    /* KM: per file, a group whose chunks are already in the prompt */
+    excludedGroups?: Record<string, string>;
 }
 
 type StoreRecord = {
@@ -35,7 +37,9 @@ class UploadStore {
                 throw new Error(`File with ID ${fileId} not found`);
             }
 
-            const chunks = UploadManager.getFileChunks(fileId);
+            const excludedGroup = this.params.excludedGroups?.[fileId];
+            const chunks = UploadManager.getFileChunks(fileId)
+                .filter((chunk) => !excludedGroup || chunk.groupId !== excludedGroup);
 
             this.records.push(...chunks.map((chunk) => ({
                 embedding: chunk.embedding,
@@ -71,7 +75,12 @@ class UploadStore {
             }).sort((a, b) => b.score - a.score)
 
             results.push(similarities)
-            hashResults.push(similarities.map(s => hashObj(s)))
+            // Hash the chunk's identity only: hashing the whole { chunk, score } object
+            // makes the same chunk hash differently per query, so results never fuse.
+            hashResults.push(similarities.map(s => hashObj({
+                fileId: s.chunk.metadata.fileId,
+                content: s.chunk.content,
+            })))
         }))
 
         const chunkMap: Map<string, Chunk> = new Map();

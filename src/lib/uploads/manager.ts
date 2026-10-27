@@ -6,6 +6,9 @@ import { splitText } from "../utils/splitText";
 import { PDFParse } from 'pdf-parse';
 import { CanvasFactory } from 'pdf-parse/worker';
 import officeParser from 'officeparser'
+import { isKmEnabled } from "../km/config";
+import { kmIngest } from "../km/ingest";
+import type { KmChatModel } from "../km/warmup";
 
 const supportedMimeTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'] as const
 
@@ -13,6 +16,8 @@ type SupportedMimeType = typeof supportedMimeTypes[number];
 
 type UploadManagerParams = {
     embeddingModel: BaseEmbedding<any>;
+    /* Chat model to warm the KM groups' KV cache with (KM only) */
+    chatModel?: KmChatModel;
 }
 
 type RecordedFile = {
@@ -69,7 +74,7 @@ class UploadManager {
         return recordedFiles.find(f => f.id === fileId) || null;
     }
 
-    static getFileChunks(fileId: string): { content: string; embedding: number[] }[] {
+    static getFileChunks(fileId: string): { content: string; embedding: number[]; groupId?: string }[] {
         try {
             const recordedFile = this.getFile(fileId);
 
@@ -86,12 +91,26 @@ class UploadManager {
         }
     }
 
-    private async extractContentAndEmbed(filePath: string, fileType: SupportedMimeType): Promise<string> {
+    private async writeKmContent(filePath: string, text: string, fileName: string): Promise<string> {
+        const data = await kmIngest(text, fileName, this.embeddingModel)
+
+        const contentPath = filePath.split('.').slice(0, -1).join('.') + '.content.json';
+
+        fs.writeFileSync(contentPath, JSON.stringify(data, null, 2));
+
+        return contentPath;
+    }
+
+    private async extractContentAndEmbed(filePath: string, fileType: SupportedMimeType, fileName: string): Promise<string> {
         switch (fileType) {
             case 'text/plain':
                 const content = fs.readFileSync(filePath, 'utf-8');
 
-                const splittedText = splitText(content, 512, 128)
+                if (isKmEnabled()) {
+                    return this.writeKmContent(filePath, content, fileName)
+                }
+
+                const splittedText = splitText(content, 256, 64)
                 const embeddings = await this.embeddingModel.embedText(splittedText)
 
                 if (embeddings.length !== splittedText.length) {
@@ -122,7 +141,11 @@ class UploadManager {
 
                 const pdfText = await parser.getText().then(res => res.text)
 
-                const pdfSplittedText = splitText(pdfText, 512, 128)
+                if (isKmEnabled()) {
+                    return this.writeKmContent(filePath, pdfText, fileName)
+                }
+
+                const pdfSplittedText = splitText(pdfText, 256, 64)
                 const pdfEmbeddings = await this.embeddingModel.embedText(pdfSplittedText)
 
                 if (pdfEmbeddings.length !== pdfSplittedText.length) {
@@ -148,7 +171,11 @@ class UploadManager {
 
                 const docText = (await officeParser.parseOffice(docBuffer)).toText()
 
-                const docSplittedText = splitText(docText, 512, 128)
+                if (isKmEnabled()) {
+                    return this.writeKmContent(filePath, docText, fileName)
+                }
+
+                const docSplittedText = splitText(docText, 256, 64)
                 const docEmbeddings = await this.embeddingModel.embedText(docSplittedText)
 
                 if (docEmbeddings.length !== docSplittedText.length) {
@@ -192,7 +219,7 @@ class UploadManager {
 
             fs.writeFileSync(filePath, buffer);
 
-            const contentFilePath = await this.extractContentAndEmbed(filePath, file.type as SupportedMimeType);
+            const contentFilePath = await this.extractContentAndEmbed(filePath, file.type as SupportedMimeType, file.name);
 
             const fileRecord: RecordedFile = {
                 id: fileId,
@@ -203,6 +230,12 @@ class UploadManager {
             }
 
             UploadManager.addNewRecordedFile(fileRecord);
+
+            if (isKmEnabled() && this.params.chatModel) {
+                /* Imported lazily: the KM store reads files through UploadManager */
+                const { enqueueWarmup } = await import("../km/warmup");
+                enqueueWarmup(fileId, this.params.chatModel);
+            }
 
             processedFiles.push({
                 fileExtension: fileExtension || '',

@@ -3,6 +3,7 @@ import BaseLLM from '../../models/base/llm';
 import BaseEmbedding from '@/lib/models/base/embedding';
 import SessionManager from '@/lib/session';
 import { ChatTurnMessage, Chunk } from '@/lib/types';
+import type { KmContext } from '@/lib/km/select';
 
 export type SearchSources = 'web' | 'discussions' | 'academic';
 
@@ -66,6 +67,8 @@ export type AdditionalConfig = {
   llm: BaseLLM<any>;
   embedding: BaseEmbedding<any>;
   session: SessionManager;
+  /* KM: per file, the group already in the prompt (left out of uploads_search) */
+  kmExcludedGroups?: Record<string, string>;
 };
 
 export type ResearcherInput = {
@@ -73,6 +76,8 @@ export type ResearcherInput = {
   followUp: string;
   classification: ClassifierOutput;
   config: SearchAgentConfig;
+  /* KM: the selected document groups; absent when KM is off or not used */
+  km?: KmContext;
 };
 
 export type ResearcherOutput = {
