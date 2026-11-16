@@ -54,6 +54,15 @@ const Attach = () => {
       data.append('embedding_model_provider_id', embeddingModelProvider);
       data.append('embedding_model_key', embeddingModel);
 
+      /* Lets KM warm the document's KV cache with the model you chat with */
+      const chatModelProvider = localStorage.getItem('chatModelProviderId');
+      const chatModel = localStorage.getItem('chatModelKey');
+
+      if (chatModelProvider && chatModel) {
+        data.append('chat_model_provider_id', chatModelProvider);
+        data.append('chat_model_key', chatModel);
+      }
+
       const res = await fetch(`/api/uploads`, {
         method: 'POST',
         body: data,

@@ -2,13 +2,18 @@ import { ResearcherOutput, SearchAgentInput } from './types';
 import SessionManager from '@/lib/session';
 import { classify } from './classifier';
 import Researcher from './researcher';
-import { getWriterPrompt } from '@/lib/prompts/search/writer';
+import {
+  getWriterPrompt,
+  getWriterUserMessage,
+} from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
 import db from '@/lib/db';
 import { messages } from '@/lib/db/schema';
 import { and, eq, gt } from 'drizzle-orm';
 import { TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
+import { isKmEnabled } from '@/lib/km/config';
+import { KmContext, getGroupSources, selectGroups } from '@/lib/km/select';
 
 class SearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
@@ -78,6 +83,24 @@ class SearchAgent {
       return widgetOutputs;
     });
 
+    // KM: pick the document group(s) that go first in the researcher and
+    // writer prompts. Runs even when search is skipped, since the writer can
+    // answer from the group alone.
+    let km: KmContext | null = null;
+
+    if (isKmEnabled() && input.config.fileIds.length > 0) {
+      try {
+        km = await selectGroups({
+          chatId: input.chatId,
+          fileIds: input.config.fileIds,
+          query: classification.standaloneFollowUp || input.followUp,
+          embedding: input.config.embedding,
+        });
+      } catch (err) {
+        console.error('KM: group selection failed, using Vane search:', err);
+      }
+    }
+
     let searchPromise: Promise<ResearcherOutput> | null = null;
 
     if (!classification.classification.skipSearch) {
@@ -87,6 +110,7 @@ class SearchAgent {
         followUp: input.followUp,
         classification: classification,
         config: input.config,
+        km: km ?? undefined,
       });
     }
 
@@ -99,16 +123,34 @@ class SearchAgent {
       type: 'researchComplete',
     });
 
+    // KM: the groups become sources after the researcher's, so the UI's
+    // source list and the writer's citation numbers line up.
+    const groupSources = km ? getGroupSources(km) : [];
+
+    if (groupSources.length > 0) {
+      session.emitBlock({
+        id: crypto.randomUUID(),
+        type: 'source',
+        data: groupSources,
+      });
+    }
+
     let finalContext =
       '<Query to be answered without searching; Search not made>';
 
-    if (searchResults) {
-      finalContext = searchResults?.searchFindings
-        .map(
+    if (searchResults || groupSources.length > 0) {
+      const findings = searchResults?.searchFindings ?? [];
+
+      finalContext = [
+        ...findings.map(
           (f, index) =>
             `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
-        )
-        .join('\n');
+        ),
+        ...groupSources.map(
+          (g, index) =>
+            `<result index=${findings.length + index + 1} title=${g.metadata.title}>The full text is in the <document_group file="${g.metadata.fileName}"> block at the start of the system prompt.</result>`,
+        ),
+      ].join('\n');
     }
 
     const widgetContext = widgetOutputs
@@ -120,9 +162,9 @@ class SearchAgent {
     const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
 
     const writerPrompt = getWriterPrompt(
-      finalContextWithWidgets,
       input.config.systemInstructions,
       input.config.mode,
+      km?.prefix,
     );
 
     const answerStream = input.config.llm.streamText({
@@ -134,7 +176,10 @@ class SearchAgent {
         ...input.chatHistory,
         {
           role: 'user',
-          content: input.followUp,
+          content: getWriterUserMessage(
+            finalContextWithWidgets,
+            input.followUp,
+          ),
         },
       ],
     });

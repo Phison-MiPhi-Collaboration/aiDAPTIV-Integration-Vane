@@ -2,7 +2,10 @@ import { ResearcherOutput, SearchAgentInput } from './types';
 import SessionManager from '@/lib/session';
 import { classify } from './classifier';
 import Researcher from './researcher';
-import { getWriterPrompt } from '@/lib/prompts/search/writer';
+import {
+  getWriterPrompt,
+  getWriterUserMessage,
+} from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
 
 class APISearchAgent {
@@ -69,7 +72,6 @@ class APISearchAgent {
     const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
 
     const writerPrompt = getWriterPrompt(
-      finalContextWithWidgets,
       input.config.systemInstructions,
       input.config.mode,
     );
@@ -83,7 +85,10 @@ class APISearchAgent {
         ...input.chatHistory,
         {
           role: 'user',
-          content: input.followUp,
+          content: getWriterUserMessage(
+            finalContextWithWidgets,
+            input.followUp,
+          ),
         },
       ],
     });
