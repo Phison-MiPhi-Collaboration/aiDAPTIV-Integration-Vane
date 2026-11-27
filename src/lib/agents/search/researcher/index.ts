@@ -19,9 +19,14 @@ class Researcher {
           ? 6
           : 25;
 
+    // KM: files whose whole text is already in the prompt are not searched.
+    const fileIds = input.km
+      ? input.km.searchableFileIds
+      : input.config.fileIds;
+
     const availableTools = ActionRegistry.getAvailableActionTools({
       classification: input.classification,
-      fileIds: input.config.fileIds,
+      fileIds,
       mode: input.config.mode,
       sources: input.config.sources,
     });
@@ -29,7 +34,7 @@ class Researcher {
     const availableActionsDescription =
       ActionRegistry.getAvailableActionsDescriptions({
         classification: input.classification,
-        fileIds: input.config.fileIds,
+        fileIds,
         mode: input.config.mode,
         sources: input.config.sources,
       });
@@ -56,14 +61,23 @@ class Researcher {
       },
     ];
 
+    // Built once and kept identical across iterations so the server can reuse
+    // the KV cache for the whole prefix. The iteration counter is appended to
+    // the history instead; a counter inside the system prompt would change the
+    // prefix every iteration and force a near-full re-prefill.
+    const researcherPrompt = getResearcherPrompt(
+      availableActionsDescription,
+      input.config.mode,
+      maxIteration,
+      fileIds,
+      input.km?.prefix,
+    );
+
     for (let i = 0; i < maxIteration; i++) {
-      const researcherPrompt = getResearcherPrompt(
-        availableActionsDescription,
-        input.config.mode,
-        i,
-        maxIteration,
-        input.config.fileIds,
-      );
+      agentMessageHistory.push({
+        role: 'user',
+        content: `<iteration>Iteration ${i + 1} of ${maxIteration}</iteration>`,
+      });
 
       const actionStream = input.config.llm.streamText({
         messages: [
@@ -166,8 +180,9 @@ class Researcher {
         embedding: input.config.embedding,
         session: session,
         researchBlockId: researchBlockId,
-        fileIds: input.config.fileIds,
+        fileIds,
         mode: input.config.mode,
+        kmExcludedGroups: input.km?.excludedGroups,
       });
 
       actionOutput.push(...actionResults);

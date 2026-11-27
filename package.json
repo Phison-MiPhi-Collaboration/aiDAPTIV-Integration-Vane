@@ -67,7 +67,7 @@
     "@types/turndown": "^5.0.6",
     "autoprefixer": "^10.0.1",
     "drizzle-kit": "^0.18.1",
-    "eslint": "^8",
+    "eslint": "^9",
     "eslint-config-next": "^16.2.2",
     "postcss": "^8",
     "prettier": "^3.2.5",
